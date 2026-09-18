@@ -1,0 +1,149 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+}
+
+enum MediaSource {
+  UPLOAD
+  GENERATED_MUSIC
+  GENERATED_VIDEO
+}
+
+enum VoiceGender {
+  MALE
+  FEMALE
+  INSTRUMENTAL
+}
+
+enum GenerationStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum TransitionType {
+  NONE
+  FADE
+  CUT
+}
+
+enum RenderStatus {
+  QUEUED
+  RENDERING
+  COMPLETED
+  FAILED
+}
+
+model MediaAsset {
+  id          String      @id @default(cuid())
+  type        MediaType
+  source      MediaSource @default(UPLOAD)
+  filename    String
+  storageKey  String      @unique
+  mimeType    String
+  sizeBytes   Int
+  durationSec Float?
+  width       Int?
+  height      Int?
+  createdAt   DateTime    @default(now())
+
+  musicGeneration MusicGeneration? @relation("MusicGenerationAsset")
+  timelineItems   TimelineItem[]
+  audioForProjects Project[]       @relation("ProjectAudioTrack")
+  renderJobs      RenderJob[]      @relation("RenderJobOutput")
+}
+
+model MusicGeneration {
+  id             String            @id @default(cuid())
+  title          String
+  lyrics         String
+  style          String
+  voiceGender    VoiceGender       @default(FEMALE)
+  instrumental   Boolean           @default(false)
+  provider       String
+  providerJobId  String?
+  status         GenerationStatus  @default(PENDING)
+  errorMessage   String?
+  resultAssetId  String?           @unique
+  resultAsset    MediaAsset?       @relation("MusicGenerationAsset", fields: [resultAssetId], references: [id])
+  batchItem      BatchItem?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+}
+
+model Project {
+  id            String        @id @default(cuid())
+  name          String
+  audioTrackId  String?
+  audioTrack    MediaAsset?   @relation("ProjectAudioTrack", fields: [audioTrackId], references: [id])
+  audioVolume   Float         @default(1.0)
+  items         TimelineItem[]
+  renderJobs    RenderJob[]
+  batchItem     BatchItem?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+model TimelineItem {
+  id             String         @id @default(cuid())
+  projectId      String
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  order          Int
+  mediaAssetId   String
+  mediaAsset     MediaAsset     @relation(fields: [mediaAssetId], references: [id])
+  durationSec    Float
+  trimStartSec   Float          @default(0)
+  transitionIn   TransitionType @default(NONE)
+  createdAt      DateTime       @default(now())
+}
+
+model RenderJob {
+  id             String       @id @default(cuid())
+  projectId      String
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status         RenderStatus @default(QUEUED)
+  progress       Int          @default(0)
+  outputAssetId  String?
+  outputAsset    MediaAsset?  @relation("RenderJobOutput", fields: [outputAssetId], references: [id])
+  errorMessage   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model BatchJob {
+  id          String      @id @default(cuid())
+  name        String
+  config      String
+  status      GenerationStatus @default(PENDING)
+  items       BatchItem[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model BatchItem {
+  id                 String            @id @default(cuid())
+  batchJobId         String
+  batchJob           BatchJob          @relation(fields: [batchJobId], references: [id], onDelete: Cascade)
+  index              Int
+  musicGenerationId  String?           @unique
+  musicGeneration    MusicGeneration?  @relation(fields: [musicGenerationId], references: [id])
+  projectId          String?           @unique
+  project            Project?          @relation(fields: [projectId], references: [id])
+  status             GenerationStatus  @default(PENDING)
+  errorMessage       String?
+  createdAt          DateTime          @default(now())
+}
