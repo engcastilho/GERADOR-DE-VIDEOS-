@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
 import { prisma } from "@/lib/prisma";
-import { extensionFromMime, pathForKey, saveBuffer } from "@/lib/storage";
-import { probeMedia } from "@/lib/media-probe";
+import { extensionFromMime, saveBuffer } from "@/lib/storage";
+import { probeBuffer } from "@/lib/media-probe";
 import { MediaType } from "@prisma/client";
 
 function typeFromMime(mimeType: string): MediaType | null {
@@ -41,9 +41,8 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const extension = extensionFromMime(mimeType) || path.extname(file.name);
+    const probe = await probeBuffer(buffer, extension);
     const storageKey = await saveBuffer(buffer, extension);
-
-    const probe = await probeMedia(pathForKey(storageKey));
 
     const asset = await prisma.mediaAsset.create({
       data: {

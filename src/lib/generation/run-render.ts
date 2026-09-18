@@ -2,11 +2,10 @@ import path from "path";
 import os from "os";
 import { randomUUID } from "crypto";
 import { readFile, unlink } from "fs/promises";
-import { statSync } from "fs";
 import { bundle } from "@remotion/bundler";
 import { renderMedia, selectComposition } from "@remotion/renderer";
 import { prisma } from "@/lib/prisma";
-import { pathForKey, saveBuffer } from "@/lib/storage";
+import { saveBuffer } from "@/lib/storage";
 import { resolveBrowserExecutable } from "./browser-executable";
 import type { TimelineCompositionProps } from "@/remotion/TimelineComposition";
 
@@ -97,7 +96,7 @@ export async function runRender(renderJobId: string) {
         filename: `${project.name}.mp4`,
         storageKey,
         mimeType: "video/mp4",
-        sizeBytes: statSync(pathForKey(storageKey)).size,
+        sizeBytes: buffer.length,
         durationSec: composition.durationInFrames / composition.fps,
         width: composition.width,
         height: composition.height,

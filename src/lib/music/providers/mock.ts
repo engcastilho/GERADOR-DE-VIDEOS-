@@ -51,18 +51,23 @@ export class MockMusicProvider implements MusicProvider {
     const storageKey = await saveBuffer(buffer, ".mp3");
     await unlink(tmpPath).catch(() => {});
 
-    return { providerJobId: `mock:${storageKey}:${DURATION_SEC}` };
+    // JSON-encoded (not colon-joined) since storageKey may be a full
+    // https:// blob URL, which itself contains colons.
+    const payload = { storageKey, durationSec: DURATION_SEC, sizeBytes: buffer.length };
+    return { providerJobId: `mock:${JSON.stringify(payload)}` };
   }
 
   async checkStatus(providerJobId: string): Promise<MusicGenStatusResult> {
-    const [, storageKey, durationStr] = providerJobId.split(":");
-    if (!storageKey) {
+    try {
+      const payload = JSON.parse(providerJobId.replace(/^mock:/, ""));
+      return {
+        status: "COMPLETED",
+        localStorageKey: payload.storageKey,
+        durationSec: payload.durationSec ?? DURATION_SEC,
+        sizeBytes: payload.sizeBytes,
+      };
+    } catch {
       return { status: "FAILED", error: "Job de mock inválido" };
     }
-    return {
-      status: "COMPLETED",
-      localStorageKey: storageKey,
-      durationSec: Number(durationStr) || DURATION_SEC,
-    };
   }
 }

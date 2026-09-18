@@ -19,6 +19,7 @@ export type MusicGenStatusResult =
       audioUrl?: string;
       localStorageKey?: string;
       durationSec?: number;
+      sizeBytes?: number;
     }
   | { status: "FAILED"; error: string };
 

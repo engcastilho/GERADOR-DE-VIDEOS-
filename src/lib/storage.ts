@@ -1,13 +1,26 @@
 import { mkdir, writeFile, unlink } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
+import { put, del } from "@vercel/blob";
 
 const STORAGE_DIR = process.env.STORAGE_DIR
   ? path.resolve(process.env.STORAGE_DIR)
   : path.resolve(process.cwd(), "storage");
 
-export function storageRoot() {
-  return STORAGE_DIR;
+/**
+ * Two storage backends behind one `storageKey` string on MediaAsset:
+ * - local disk (dev): storageKey is a filename under STORAGE_DIR.
+ * - Vercel Blob (production on Vercel, whose filesystem is read-only and
+ *   ephemeral): storageKey is the blob's public https URL.
+ * Callers don't need to know which one is active — `isRemoteUrl` tells the
+ * file-serving route whether to stream from disk or redirect.
+ */
+function isBlobEnabled() {
+  return process.env.STORAGE_DRIVER === "blob" || !!process.env.BLOB_READ_WRITE_TOKEN;
+}
+
+export function isRemoteUrl(storageKey: string) {
+  return storageKey.startsWith("http://") || storageKey.startsWith("https://");
 }
 
 export function pathForKey(storageKey: string) {
@@ -15,13 +28,23 @@ export function pathForKey(storageKey: string) {
 }
 
 export async function saveBuffer(buffer: Buffer, extension: string) {
+  const filename = `${randomUUID()}${extension.startsWith(".") ? extension : `.${extension}`}`;
+
+  if (isBlobEnabled()) {
+    const blob = await put(filename, buffer, { access: "public", addRandomSuffix: false });
+    return blob.url;
+  }
+
   await mkdir(STORAGE_DIR, { recursive: true });
-  const storageKey = `${randomUUID()}${extension.startsWith(".") ? extension : `.${extension}`}`;
-  await writeFile(pathForKey(storageKey), buffer);
-  return storageKey;
+  await writeFile(pathForKey(filename), buffer);
+  return filename;
 }
 
 export async function deleteStoredFile(storageKey: string) {
+  if (isRemoteUrl(storageKey)) {
+    await del(storageKey).catch(() => {});
+    return;
+  }
   try {
     await unlink(pathForKey(storageKey));
   } catch (err) {

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getMusicProvider } from "@/lib/music";
-import { extensionFromMime, pathForKey, saveBuffer } from "@/lib/storage";
-import { probeMedia } from "@/lib/media-probe";
+import { extensionFromMime, saveBuffer } from "@/lib/storage";
+import { probeBuffer } from "@/lib/media-probe";
 import { onMusicGenerationSettled } from "@/lib/batch/orchestrate";
 
 const POLL_INTERVAL_MS = 5000;
@@ -58,6 +58,7 @@ export async function runMusicGeneration(musicGenerationId: string) {
       // COMPLETED
       let storageKey = result.localStorageKey;
       let durationSec = result.durationSec;
+      let sizeBytes = result.sizeBytes;
 
       if (!storageKey) {
         if (!result.audioUrl) {
@@ -69,16 +70,16 @@ export async function runMusicGeneration(musicGenerationId: string) {
         }
         const buffer = Buffer.from(await res.arrayBuffer());
         const contentType = res.headers.get("content-type") ?? "audio/mpeg";
-        storageKey = await saveBuffer(buffer, extensionFromMime(contentType) || ".mp3");
-      }
+        const extension = extensionFromMime(contentType) || ".mp3";
+        sizeBytes = buffer.length;
 
-      if (!durationSec) {
-        const probe = await probeMedia(pathForKey(storageKey));
-        durationSec = probe.durationSec;
-      }
+        if (!durationSec) {
+          const probe = await probeBuffer(buffer, extension);
+          durationSec = probe.durationSec;
+        }
 
-      const { statSync } = await import("fs");
-      const sizeBytes = statSync(pathForKey(storageKey)).size;
+        storageKey = await saveBuffer(buffer, extension);
+      }
 
       const asset = await prisma.mediaAsset.create({
         data: {
@@ -87,7 +88,7 @@ export async function runMusicGeneration(musicGenerationId: string) {
           filename: `${generation.title || "musica"}.mp3`,
           storageKey,
           mimeType: "audio/mpeg",
-          sizeBytes,
+          sizeBytes: sizeBytes ?? 0,
           durationSec,
         },
       });

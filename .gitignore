@@ -45,7 +45,3 @@ next-env.d.ts
 
 # uploaded/generated media (local storage backend)
 /storage
-
-# sqlite dev database
-/prisma/dev.db
-/prisma/dev.db-journal

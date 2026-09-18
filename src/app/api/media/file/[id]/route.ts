@@ -1,8 +1,8 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createReadStream, statSync } from "fs";
 import { Readable } from "stream";
 import { prisma } from "@/lib/prisma";
-import { pathForKey } from "@/lib/storage";
+import { isRemoteUrl, pathForKey } from "@/lib/storage";
 
 export async function GET(
   req: NextRequest,
@@ -12,6 +12,10 @@ export async function GET(
   const asset = await prisma.mediaAsset.findUnique({ where: { id } });
   if (!asset) {
     return new Response("Not found", { status: 404 });
+  }
+
+  if (isRemoteUrl(asset.storageKey)) {
+    return NextResponse.redirect(asset.storageKey);
   }
 
   const filePath = pathForKey(asset.storageKey);
